@@ -12,7 +12,7 @@ import {
   CreditCard,
   ExternalLink,
 } from "lucide-react";
-import heroImg from "@/assets/retreat-hero.jpg";
+import heroImg from "@/assets/New Hero image.png";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -163,7 +163,10 @@ function Index() {
               <h1 className="font-display font-bold text-4xl sm:text-5xl md:text-6xl lg:text-7xl leading-[1.05] mb-5">
                 2026 Annual <span className="gradient-text">In-Person Retreat</span>
               </h1>
-              <p className="text-base md:text-lg font-display font-semibold tracking-wide uppercase mb-4 text-accent">
+              <p className="text-base md:text-lg font-display font-semibold tracking-wider uppercase mb-1 text-accent/70">
+                Theme
+              </p>
+              <p className="text-xl md:text-2xl lg:text-3xl font-display font-bold tracking-wide uppercase text-accent">
                 Ambassadors
               </p>
               <p className="text-lg md:text-xl text-primary-foreground/85 max-w-2xl mx-auto mb-10">
