@@ -1,5 +1,0 @@
-{
-  "buildCommand": "npm run build",
-  "framework": null,
-  "devCommand": "npm run dev"
-}
