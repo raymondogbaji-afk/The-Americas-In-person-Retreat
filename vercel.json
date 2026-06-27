@@ -1,10 +1,5 @@
 {
   "buildCommand": "npm run build",
   "framework": null,
-  "devCommand": "npm run dev",
-  "functions": {
-    "api/index.mjs": {
-      "runtime": "@vercel/node@4"
-    }
-  }
+  "devCommand": "npm run dev"
 }
