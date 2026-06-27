@@ -1,6 +1,10 @@
 {
   "buildCommand": "npm run build",
-  "outputDirectory": ".vercel/output",
   "framework": null,
-  "devCommand": "npm run dev"
+  "devCommand": "npm run dev",
+  "functions": {
+    "api/index.mjs": {
+      "runtime": "@vercel/node@4"
+    }
+  }
 }
