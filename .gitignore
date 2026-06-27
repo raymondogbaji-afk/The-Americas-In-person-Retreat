@@ -19,6 +19,8 @@ dist-ssr
 # Environment variables
 .env
 
+.vercel
+
 # Wrangler / Cloudflare
 .wrangler/
 .dev.vars
