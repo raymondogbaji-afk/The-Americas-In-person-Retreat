@@ -169,12 +169,14 @@ function Index() {
               <p className="text-xl md:text-2xl lg:text-3xl font-display font-bold tracking-wide uppercase text-accent">
                 Ambassadors
               </p>
-              <p className="text-lg md:text-xl text-primary-foreground/85 max-w-2xl mx-auto mb-10">
+              <p className="text-base md:text-lg text-primary-foreground/85 max-w-2xl mx-auto mb-10">
                 Excelling in <em className="not-italic font-semibold text-white">Faith</em>,{" "}
                 <em className="not-italic font-semibold text-white">Family</em>,{" "}
                 <em className="not-italic font-semibold text-white">Field</em>, and{" "}
-                <em className="not-italic font-semibold text-white">Finance</em>. Three days of
-                worship, fellowship, and renewal with Christian physicians and dentists across the
+                <em className="not-italic font-semibold text-white">Finance</em>.
+              </p>
+              <p className="text-sm md:text-base italic text-primary-foreground/75 max-w-2xl mx-auto -mt-4 mb-10">
+                Three days of worship, fellowship, and renewal with Christian physicians and dentists across the
                 Americas and Caribbean.
               </p>
 
