@@ -84,10 +84,11 @@ export async function sendConfirmationEmail(reg: {
   fee: "single" | "couple";
 }): Promise<void> {
   const fee = reg.fee === "single" ? "250" : "400";
-  const qrDataUrl = await QRCode.toDataURL(
+  const qrBuffer = await QRCode.toBuffer(
     JSON.stringify({ id: reg.uniqueId, name: reg.name, email: reg.email }),
     { width: 400, margin: 2, color: { dark: "#1a0a3e" } },
   );
+  const qrBase64 = qrBuffer.toString("base64");
 
   const resend = new Resend(getApiKey());
 
@@ -95,13 +96,20 @@ export async function sendConfirmationEmail(reg: {
     from: FROM,
     to: reg.email,
     subject: `CMDA Retreat 2026 — Registration Confirmed (${reg.uniqueId})`,
+    attachments: [
+      {
+        filename: "qrcode.png",
+        content: qrBase64,
+        content_id: "qrcode",
+      },
+    ],
     html: buildEmailHtml({
       name: reg.name,
       uniqueId: reg.uniqueId,
       email: reg.email,
       phone: reg.phone,
       fee,
-      qrDataUrl,
+      qrDataUrl: "cid:qrcode",
     }),
   });
 
