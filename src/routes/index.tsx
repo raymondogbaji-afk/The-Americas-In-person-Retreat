@@ -158,7 +158,7 @@ function Index() {
           <div className="container mx-auto px-4 py-20 md:py-32 relative z-10">
             <div className="max-w-3xl mx-auto text-center">
               <p className="text-xs md:text-sm font-semibold tracking-[0.2em] uppercase text-accent mb-4">
-                CMDA Nigeria · Americas &amp; Caribbeans Region
+                CMDA Nigeria Global Network &mdash; The Americas &amp; Caribbeans Region
               </p>
               <h1 className="font-display font-bold text-4xl sm:text-5xl md:text-6xl lg:text-7xl leading-[1.05] mb-5">
                 2026 Annual <span className="gradient-text">In-Person Retreat</span>

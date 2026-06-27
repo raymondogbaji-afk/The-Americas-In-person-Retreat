@@ -56,7 +56,11 @@ function CheckInPage() {
     setResult(null);
     setCheckedInReg(null);
 
-    if (!scannerDivRef.current) return;
+    // Show the scanner div first so Html5Qrcode can render into it
+    setScanning(true);
+
+    // Wait for React to render the div
+    await new Promise((r) => setTimeout(r, 100));
 
     try {
       const scanner = new Html5Qrcode("qr-scanner");
@@ -80,9 +84,8 @@ function CheckInPage() {
         },
         () => {},
       );
-
-      setScanning(true);
     } catch (err) {
+      setScanning(false);
       setError("Camera access denied or not available. Use manual entry instead.");
     }
   };
@@ -264,11 +267,6 @@ function CheckInPage() {
                     <Button onClick={startScanner}>
                       <Camera className="w-4 h-4" /> Start Camera Scanner
                     </Button>
-                    {error && (
-                      <p className="mt-3 text-sm text-destructive flex items-center justify-center gap-1">
-                        <XCircle className="w-4 h-4" /> {error}
-                      </p>
-                    )}
                   </div>
                 ) : (
                   <div className="text-center">
@@ -278,12 +276,12 @@ function CheckInPage() {
                     <Button variant="outline" onClick={stopScanner}>
                       <CameraOff className="w-4 h-4" /> Stop Scanner
                     </Button>
-                    {error && (
-                      <p className="mt-3 text-sm text-destructive flex items-center justify-center gap-1">
-                        <XCircle className="w-4 h-4" /> {error}
-                      </p>
-                    )}
                   </div>
+                )}
+                {error && (
+                  <p className="mt-3 text-sm text-destructive flex items-center justify-center gap-1">
+                    <XCircle className="w-4 h-4" /> {error}
+                  </p>
                 )}
               </div>
 
@@ -313,11 +311,6 @@ function CheckInPage() {
                     <UserCheck className="w-4 h-4" /> Look Up
                   </Button>
                 </div>
-                {error && (
-                  <p className="mt-3 text-sm text-destructive flex items-center gap-1">
-                    <XCircle className="w-4 h-4" /> {error}
-                  </p>
-                )}
               </div>
             </>
           )}
