@@ -5,20 +5,7 @@ import { CheckCircle2, ArrowLeft, Download, ExternalLink, Clock, AlertTriangle }
 import { getRegistration } from "@/lib/api";
 import type { Registration } from "@/lib/storage";
 
-const PAYPAL_BUSINESS_EMAIL = "your-paypal-business@email.com";
-
-function paypalLink(reg: Registration): string {
-  const amount = reg.fee === "single" ? "250" : "400";
-  const params = new URLSearchParams({
-    business: PAYPAL_BUSINESS_EMAIL,
-    item_name: "CMDA Retreat 2026 Registration",
-    item_number: reg.uniqueId,
-    amount,
-    currency_code: "USD",
-    no_shipping: "1",
-  });
-  return `https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&${params.toString()}`;
-}
+const PAYPAL_LINK = "https://www.paypal.com/ncp/payment/UKUAZ3CXRFZ3A";
 
 export const Route = createFileRoute("/confirmation/$id")({
   component: ConfirmationPage,
@@ -189,7 +176,7 @@ function ConfirmationPage() {
                 complete your payment to receive the confirmation email with your QR code.
               </p>
               <a
-                href={paypalLink(reg)}
+                href={PAYPAL_LINK}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-md bg-[#0070ba] text-white font-semibold hover:bg-[#003087] transition"
