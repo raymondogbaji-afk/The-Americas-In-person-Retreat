@@ -68,7 +68,7 @@ type FormState = {
 
   // Step 4 — Payment
   fee: Fee;
-  paymentMethod: "" | "check" | "transfer" | "card";
+  paymentMethod: "" | "check" | "transfer" | "paypal";
 
   consent: boolean;
 };
@@ -257,7 +257,7 @@ function Index() {
                           <Loader2 className="w-4 h-4 animate-spin" /> Submitting...
                         </>
                       ) : (
-                        <>Confirm &amp; Register ${selected.price}</>
+                        <>Register — ${selected.price}</>
                       )}
                     </button>
                   )}
@@ -406,7 +406,7 @@ function StepAttendee({ form, update }: StepProps) {
     <div>
       <h3 className="text-xl font-display font-semibold mb-1">Attendee details</h3>
       <p className="text-sm text-muted-foreground mb-6">
-        We will send your confirmation and payment receipt to this email.
+        We will send your payment and confirmation details to this email.
       </p>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Field label="Name *">
@@ -626,7 +626,7 @@ function StepPayment({
   const methodOptions: { id: FormState["paymentMethod"]; label: string; note: string }[] = [
     { id: "check", label: "Check", note: "Mail to CMDA Global" },
     { id: "transfer", label: "Bank Transfer", note: "Details sent on confirmation" },
-    { id: "card", label: "Credit Card", note: "Pay online via CMDA Global" },
+    { id: "paypal", label: "PayPal", note: "Pay online with PayPal or credit card" },
   ];
 
   return (
@@ -684,15 +684,14 @@ function StepPayment({
           </div>
         </Field>
 
-        {form.paymentMethod === "card" && (
-          <a
-            href={CREDIT_CARD_LINK}
-            target="_blank"
-            rel="noreferrer"
-            className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-primary hover:underline"
-          >
-            Pay ${selected.price} by credit card <ExternalLink className="w-4 h-4" />
-          </a>
+        {form.paymentMethod === "paypal" && (
+          <div className="mt-3 rounded-lg border border-dashed border-border p-3 text-sm text-muted-foreground">
+            <p>
+              After registering, you will be redirected to PayPal to complete your payment of{" "}
+              <strong>${selected.price}</strong>. A confirmation email will be sent once payment is
+              received.
+            </p>
+          </div>
         )}
       </div>
 
@@ -761,7 +760,7 @@ function StepReview({
     <div>
       <h3 className="text-xl font-display font-semibold mb-1">Review your registration</h3>
       <p className="text-sm text-muted-foreground mb-6">
-        Confirm the details below and proceed to secure payment.
+        Confirm the details below and submit your registration. You will receive a confirmation email after payment is verified.
       </p>
       <dl className="divide-y divide-border rounded-lg border border-border">
         {rows.map(([k, v]) => (

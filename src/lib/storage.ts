@@ -1,5 +1,7 @@
 import { supabase } from "./supabase";
 
+export type PaymentStatus = "pending" | "paid";
+
 export interface Registration {
   id: string;
   uniqueId: string;
@@ -20,7 +22,9 @@ export interface Registration {
   hasTalent: "" | "yes" | "no";
   talentDetails: string;
   fee: "single" | "couple";
-  paymentMethod: "" | "check" | "transfer" | "card";
+  paymentMethod: "" | "check" | "transfer" | "paypal";
+  paymentStatus: PaymentStatus;
+  paypalTransactionId: string | null;
   consent: boolean;
   checkedIn: boolean;
   checkedInAt: string | null;
@@ -48,6 +52,8 @@ type DbRow = {
   talent_details: string;
   fee: string;
   payment_method: string;
+  payment_status: string | null;
+  paypal_transaction_id: string | null;
   consent: boolean;
   checked_in: boolean;
   checked_in_at: string | null;
@@ -76,6 +82,8 @@ function toCamelCase(row: DbRow): Registration {
     talentDetails: row.talent_details,
     fee: row.fee as Registration["fee"],
     paymentMethod: row.payment_method as Registration["paymentMethod"],
+    paymentStatus: (row.payment_status as PaymentStatus) ?? "pending",
+    paypalTransactionId: row.paypal_transaction_id ?? null,
     consent: row.consent,
     checkedIn: row.checked_in,
     checkedInAt: row.checked_in_at,
@@ -93,7 +101,10 @@ function generateId(): string {
 }
 
 export async function createRegistration(
-  data: Omit<Registration, "id" | "uniqueId" | "checkedIn" | "checkedInAt" | "createdAt"> & {
+  data: Omit<
+    Registration,
+    "id" | "uniqueId" | "paymentStatus" | "paypalTransactionId" | "checkedIn" | "checkedInAt" | "createdAt"
+  > & {
     consent?: boolean;
   },
 ): Promise<Registration> {
@@ -120,6 +131,7 @@ export async function createRegistration(
       talent_details: data.talentDetails,
       fee: data.fee,
       payment_method: data.paymentMethod,
+      payment_status: "pending",
       consent: data.consent ?? false,
     })
     .select()
@@ -162,10 +174,28 @@ export async function markCheckedIn(id: string): Promise<Registration | null> {
   return toCamelCase(data as DbRow);
 }
 
+export async function markAsPaid(
+  uniqueId: string,
+  paypalTransactionId?: string,
+): Promise<Registration | null> {
+  const updates: Record<string, unknown> = { payment_status: "paid" };
+  if (paypalTransactionId) updates.paypal_transaction_id = paypalTransactionId;
+  const { data, error } = await supabase
+    .from("registrations")
+    .update(updates)
+    .eq("unique_id", uniqueId)
+    .select()
+    .single();
+  if (error || !data) return null;
+  return toCamelCase(data as DbRow);
+}
+
 export async function getRegistrationStats(): Promise<{
   total: number;
   checkedIn: number;
   pending: number;
+  paid: number;
+  unpaid: number;
   single: number;
   couple: number;
 }> {
@@ -174,6 +204,8 @@ export async function getRegistrationStats(): Promise<{
     total: all.length,
     checkedIn: all.filter((r) => r.checkedIn).length,
     pending: all.filter((r) => !r.checkedIn).length,
+    paid: all.filter((r) => r.paymentStatus === "paid").length,
+    unpaid: all.filter((r) => r.paymentStatus === "pending").length,
     single: all.filter((r) => r.fee === "single").length,
     couple: all.filter((r) => r.fee === "couple").length,
   };

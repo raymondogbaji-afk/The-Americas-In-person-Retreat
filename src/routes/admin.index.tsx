@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import {
   Users,
@@ -10,8 +10,11 @@ import {
   Search,
   Download,
   ExternalLink,
+  DollarSign,
+  Loader2,
+  Mail,
 } from "lucide-react";
-import { listRegistrations, getStats } from "@/lib/api";
+import { listRegistrations, getStats, markPaid } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,6 +37,7 @@ export const Route = createFileRoute("/admin/")({
 
 function AdminDashboard() {
   const [search, setSearch] = useState("");
+  const queryClient = useQueryClient();
 
   const { data: registrations = [] } = useQuery({
     queryKey: ["registrations"],
@@ -46,6 +50,16 @@ function AdminDashboard() {
     queryFn: () => getStats(),
     refetchInterval: 10000,
   });
+
+  const markPaidMutation = useMutation({
+    mutationFn: (id: string) => markPaid({ data: { id } }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["registrations"] });
+      queryClient.invalidateQueries({ queryKey: ["registration-stats"] });
+    },
+  });
+
+  const paidCount = registrations.filter((r) => r.paymentStatus === "paid").length;
 
   const filtered = registrations.filter(
     (r) =>
@@ -68,6 +82,8 @@ function AdminDashboard() {
       "Dietary",
       "Fee",
       "Payment Method",
+      "Payment Status",
+      "PayPal Transaction ID",
       "Checked In",
       "Checked In At",
       "Created At",
@@ -85,6 +101,8 @@ function AdminDashboard() {
       r.dietary === "other" ? r.dietaryOther : r.dietary,
       r.fee === "single" ? "Single ($250)" : "Couple ($400)",
       r.paymentMethod,
+      r.paymentStatus,
+      r.paypalTransactionId || "",
       r.checkedIn ? "Yes" : "No",
       r.checkedInAt || "",
       r.createdAt,
@@ -172,15 +190,11 @@ function AdminDashboard() {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <Shield className="w-4 h-4" /> Check-In Rate
+                <DollarSign className="w-4 h-4 text-success" /> Payments Received
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-3xl font-display font-bold">
-                {stats && stats.total > 0
-                  ? `${Math.round((stats.checkedIn / stats.total) * 100)}%`
-                  : "—"}
-              </p>
+              <p className="text-3xl font-display font-bold text-success">{paidCount}</p>
             </CardContent>
           </Card>
         </div>
@@ -210,14 +224,15 @@ function AdminDashboard() {
                   <TableHead>Email</TableHead>
                   <TableHead>Fee</TableHead>
                   <TableHead>Payment</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead>Payment Status</TableHead>
+                  <TableHead>Check-In</TableHead>
                   <TableHead>Registered</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
                       {search ? "No registrations match your search." : "No registrations yet."}
                     </TableCell>
                   </TableRow>
@@ -230,6 +245,35 @@ function AdminDashboard() {
                     <TableCell>${reg.fee === "single" ? "250" : "400"}</TableCell>
                     <TableCell className="capitalize">{reg.paymentMethod || "—"}</TableCell>
                     <TableCell>
+                      {reg.paymentStatus === "paid" ? (
+                        <Badge
+                          variant="default"
+                          className="bg-success/10 text-success hover:bg-success/15"
+                        >
+                          Paid
+                        </Badge>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="text-warning border-warning/30">
+                            Pending
+                          </Badge>
+                          <button
+                            type="button"
+                            disabled={markPaidMutation.isPending}
+                            onClick={() => markPaidMutation.mutate(reg.uniqueId)}
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50"
+                          >
+                            {markPaidMutation.isPending ? (
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                            ) : (
+                              <Mail className="w-3 h-3" />
+                            )}
+                            Mark Paid & Send
+                          </button>
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell>
                       {reg.checkedIn ? (
                         <Badge
                           variant="default"
@@ -238,7 +282,7 @@ function AdminDashboard() {
                           Checked In
                         </Badge>
                       ) : (
-                        <Badge variant="outline">Pending</Badge>
+                        <Badge variant="outline">—</Badge>
                       )}
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">

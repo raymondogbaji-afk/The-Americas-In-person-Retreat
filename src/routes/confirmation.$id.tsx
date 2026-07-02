@@ -1,9 +1,24 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import QRCode from "qrcode";
-import { CheckCircle2, ArrowLeft, Download } from "lucide-react";
+import { CheckCircle2, ArrowLeft, Download, ExternalLink, Clock, AlertTriangle } from "lucide-react";
 import { getRegistration } from "@/lib/api";
 import type { Registration } from "@/lib/storage";
+
+const PAYPAL_BUSINESS_EMAIL = "your-paypal-business@email.com";
+
+function paypalLink(reg: Registration): string {
+  const amount = reg.fee === "single" ? "250" : "400";
+  const params = new URLSearchParams({
+    business: PAYPAL_BUSINESS_EMAIL,
+    item_name: "CMDA Retreat 2026 Registration",
+    item_number: reg.uniqueId,
+    amount,
+    currency_code: "USD",
+    no_shipping: "1",
+  });
+  return `https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&${params.toString()}`;
+}
 
 export const Route = createFileRoute("/confirmation/$id")({
   component: ConfirmationPage,
@@ -82,10 +97,10 @@ function ConfirmationPage() {
             <CheckCircle2 className="w-8 h-8 text-success" />
           </div>
 
-          <h1 className="text-3xl font-display font-bold mb-2">Registration Confirmed!</h1>
+          <h1 className="text-3xl font-display font-bold mb-2">Registration Received!</h1>
           <p className="text-muted-foreground mb-8">
             Thank you, <span className="font-semibold text-foreground">{reg.name}</span>. Your
-            registration for the CMDA Americas Retreat 2026 has been received.
+            registration for the CMDA Americas Retreat 2026 has been submitted.
           </p>
 
           <div className="bg-card border border-border rounded-2xl p-6 shadow-sm mb-8 text-left">
@@ -114,11 +129,17 @@ function ConfirmationPage() {
                 <dd className="font-medium">${reg.fee === "single" ? "250" : "400"}</dd>
               </div>
               <div className="flex justify-between">
-                <dt className="text-muted-foreground">Status</dt>
+                <dt className="text-muted-foreground">Payment</dt>
                 <dd>
-                  <span className="inline-flex items-center gap-1 rounded-full bg-success/10 text-success px-3 py-0.5 text-xs font-semibold">
-                    Registered
-                  </span>
+                  {reg.paymentStatus === "paid" ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-success/10 text-success px-3 py-0.5 text-xs font-semibold">
+                      Paid
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-warning/10 text-warning px-3 py-0.5 text-xs font-semibold">
+                      Awaiting Payment
+                    </span>
+                  )}
                 </dd>
               </div>
             </dl>
@@ -147,16 +168,37 @@ function ConfirmationPage() {
             </div>
           )}
 
-          <div className="bg-gradient-to-br from-primary/5 to-secondary/5 border border-border rounded-2xl p-6 text-sm text-muted-foreground">
-            <p className="font-medium text-foreground mb-1">Confirmation Email</p>
-            <p>
-              A confirmation email with your unique ID and QR code has been sent to{" "}
-              <span className="font-semibold text-foreground">{reg.email}</span>.
-            </p>
-            <p className="mt-2">
-              Please save your QR code — you will need it for check-in at the venue.
-            </p>
-          </div>
+          {reg.paymentStatus === "paid" ? (
+            <div className="bg-gradient-to-br from-success/5 to-primary/5 border border-success/20 rounded-2xl p-6 text-sm text-muted-foreground">
+              <p className="font-medium text-foreground mb-1">Confirmation Email Sent</p>
+              <p>
+                A confirmation email with your unique ID and QR code has been sent to{" "}
+                <span className="font-semibold text-foreground">{reg.email}</span>.
+              </p>
+              <p className="mt-2">
+                Please save your QR code — you will need it for check-in at the venue.
+              </p>
+            </div>
+          ) : (
+            <div className="bg-warning/5 border border-warning/20 rounded-2xl p-6 text-sm">
+              <p className="font-medium text-foreground mb-2 flex items-center gap-2">
+                <Clock className="w-4 h-4 text-warning" /> Payment Required
+              </p>
+              <p className="text-muted-foreground mb-4">
+                Your registration is saved but <strong>not yet confirmed</strong>. Please
+                complete your payment to receive the confirmation email with your QR code.
+              </p>
+              <a
+                href={paypalLink(reg)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-md bg-[#0070ba] text-white font-semibold hover:bg-[#003087] transition"
+              >
+                Pay ${reg.fee === "single" ? "250" : "400"} with PayPal{" "}
+                <ExternalLink className="w-4 h-4" />
+              </a>
+            </div>
+          )}
 
           <div className="mt-8">
             <Link
