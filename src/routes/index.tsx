@@ -10,7 +10,6 @@ import {
   CheckCircle2,
   ArrowRight,
   CreditCard,
-  ExternalLink,
 } from "lucide-react";
 import heroImg from "@/assets/New Hero image.png";
 
@@ -40,7 +39,8 @@ const fees: { id: Fee; label: string; price: number; note: string }[] = [
   },
 ];
 
-const HOTEL_BOOKING_LINK = "#"; // replace with Maritime Conf. Center booking link
+const HOTEL_PHONE = "(410) 859-5700";
+const HOTEL_TOLL_FREE = "1-866-900-3517";
 
 const PROVINCES = [
   // USA
@@ -812,15 +812,11 @@ function StepPayment({
 
       <div className="mt-6 rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
         <p className="font-medium text-foreground mb-1">Hotel reservation</p>
-        Hotel rooms are booked directly with Maritime Conference Center.{" "}
-        <a
-          href={HOTEL_BOOKING_LINK}
-          target="_blank"
-          rel="noreferrer"
-          className="text-primary font-semibold hover:underline inline-flex items-center gap-1"
-        >
-          Book your room <ExternalLink className="w-3.5 h-3.5" />
-        </a>
+        <p className="mb-2">
+          Call the hotel directly to reserve. Mention <strong>CMDA Global Network Retreat</strong> for group rates.
+        </p>
+        <p><a href={`tel:${HOTEL_PHONE.replace(/[^\d]/g, "")}`} className="text-primary font-semibold hover:underline">{HOTEL_PHONE}</a> — Main</p>
+        <p><a href={`tel:${HOTEL_TOLL_FREE.replace(/[^\d]/g, "")}`} className="text-primary font-semibold hover:underline">{HOTEL_TOLL_FREE}</a> — Toll-Free</p>
       </div>
     </div>
   );
@@ -930,16 +926,23 @@ function HotelCard() {
     <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
       <h4 className="font-display font-semibold mb-2">Hotel reservation</h4>
       <p className="text-sm text-muted-foreground mb-3">
-        Book your room directly at Maritime Conference Center.
+        Call the hotel directly to reserve your accommodation. Mention <strong>CMDA Global Network
+        Retreat</strong> for group rates.
       </p>
-      <a
-        href={HOTEL_BOOKING_LINK}
-        target="_blank"
-        rel="noreferrer"
-        className="inline-flex items-center gap-2 text-sm font-semibold text-primary hover:underline"
-      >
-        Open booking link <ExternalLink className="w-4 h-4" />
-      </a>
+      <div className="text-sm space-y-1">
+        <p>
+          <a href={`tel:${HOTEL_PHONE.replace(/[^\d]/g, "")}`} className="font-semibold text-primary hover:underline">
+            {HOTEL_PHONE}
+          </a>
+          <span className="text-muted-foreground"> — Main</span>
+        </p>
+        <p>
+          <a href={`tel:${HOTEL_TOLL_FREE.replace(/[^\d]/g, "")}`} className="font-semibold text-primary hover:underline">
+            {HOTEL_TOLL_FREE}
+          </a>
+          <span className="text-muted-foreground"> — Toll-Free</span>
+        </p>
+      </div>
     </div>
   );
 }
