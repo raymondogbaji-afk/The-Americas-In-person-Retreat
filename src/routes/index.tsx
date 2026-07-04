@@ -40,8 +40,107 @@ const fees: { id: Fee; label: string; price: number; note: string }[] = [
   },
 ];
 
-const CREDIT_CARD_LINK = "#"; // replace with CMDA Global payment link
 const HOTEL_BOOKING_LINK = "#"; // replace with Maritime Conf. Center booking link
+
+const PROVINCES = [
+  // USA
+  { group: "USA", value: "Alabama" },
+  { group: "USA", value: "Alaska" },
+  { group: "USA", value: "Arizona" },
+  { group: "USA", value: "Arkansas" },
+  { group: "USA", value: "California" },
+  { group: "USA", value: "Colorado" },
+  { group: "USA", value: "Connecticut" },
+  { group: "USA", value: "Delaware" },
+  { group: "USA", value: "District of Columbia" },
+  { group: "USA", value: "Florida" },
+  { group: "USA", value: "Georgia" },
+  { group: "USA", value: "Hawaii" },
+  { group: "USA", value: "Idaho" },
+  { group: "USA", value: "Illinois" },
+  { group: "USA", value: "Indiana" },
+  { group: "USA", value: "Iowa" },
+  { group: "USA", value: "Kansas" },
+  { group: "USA", value: "Kentucky" },
+  { group: "USA", value: "Louisiana" },
+  { group: "USA", value: "Maine" },
+  { group: "USA", value: "Maryland" },
+  { group: "USA", value: "Massachusetts" },
+  { group: "USA", value: "Michigan" },
+  { group: "USA", value: "Minnesota" },
+  { group: "USA", value: "Mississippi" },
+  { group: "USA", value: "Missouri" },
+  { group: "USA", value: "Montana" },
+  { group: "USA", value: "Nebraska" },
+  { group: "USA", value: "Nevada" },
+  { group: "USA", value: "New Hampshire" },
+  { group: "USA", value: "New Jersey" },
+  { group: "USA", value: "New Mexico" },
+  { group: "USA", value: "New York" },
+  { group: "USA", value: "North Carolina" },
+  { group: "USA", value: "North Dakota" },
+  { group: "USA", value: "Ohio" },
+  { group: "USA", value: "Oklahoma" },
+  { group: "USA", value: "Oregon" },
+  { group: "USA", value: "Pennsylvania" },
+  { group: "USA", value: "Rhode Island" },
+  { group: "USA", value: "South Carolina" },
+  { group: "USA", value: "South Dakota" },
+  { group: "USA", value: "Tennessee" },
+  { group: "USA", value: "Texas" },
+  { group: "USA", value: "Utah" },
+  { group: "USA", value: "Vermont" },
+  { group: "USA", value: "Virginia" },
+  { group: "USA", value: "Washington" },
+  { group: "USA", value: "West Virginia" },
+  { group: "USA", value: "Wisconsin" },
+  { group: "USA", value: "Wyoming" },
+  // Canada
+  { group: "Canada", value: "Alberta" },
+  { group: "Canada", value: "British Columbia" },
+  { group: "Canada", value: "Manitoba" },
+  { group: "Canada", value: "New Brunswick" },
+  { group: "Canada", value: "Newfoundland and Labrador" },
+  { group: "Canada", value: "Nova Scotia" },
+  { group: "Canada", value: "Ontario" },
+  { group: "Canada", value: "Prince Edward Island" },
+  { group: "Canada", value: "Quebec" },
+  { group: "Canada", value: "Saskatchewan" },
+  { group: "Canada", value: "Northwest Territories" },
+  { group: "Canada", value: "Nunavut" },
+  { group: "Canada", value: "Yukon" },
+  // Caribbean
+  { group: "Caribbean", value: "Anguilla" },
+  { group: "Caribbean", value: "Antigua and Barbuda" },
+  { group: "Caribbean", value: "Aruba" },
+  { group: "Caribbean", value: "Bahamas" },
+  { group: "Caribbean", value: "Barbados" },
+  { group: "Caribbean", value: "Belize" },
+  { group: "Caribbean", value: "Bermuda" },
+  { group: "Caribbean", value: "Bonaire" },
+  { group: "Caribbean", value: "British Virgin Islands" },
+  { group: "Caribbean", value: "Cayman Islands" },
+  { group: "Caribbean", value: "Cuba" },
+  { group: "Caribbean", value: "Curaçao" },
+  { group: "Caribbean", value: "Dominica" },
+  { group: "Caribbean", value: "Dominican Republic" },
+  { group: "Caribbean", value: "Grenada" },
+  { group: "Caribbean", value: "Guadeloupe" },
+  { group: "Caribbean", value: "Guyana" },
+  { group: "Caribbean", value: "Haiti" },
+  { group: "Caribbean", value: "Jamaica" },
+  { group: "Caribbean", value: "Martinique" },
+  { group: "Caribbean", value: "Montserrat" },
+  { group: "Caribbean", value: "Saint Barthélemy" },
+  { group: "Caribbean", value: "Saint Kitts and Nevis" },
+  { group: "Caribbean", value: "Saint Lucia" },
+  { group: "Caribbean", value: "Saint Martin" },
+  { group: "Caribbean", value: "Saint Vincent and the Grenadines" },
+  { group: "Caribbean", value: "Suriname" },
+  { group: "Caribbean", value: "Trinidad and Tobago" },
+  { group: "Caribbean", value: "Turks and Caicos Islands" },
+  { group: "Caribbean", value: "U.S. Virgin Islands" },
+];
 
 type FormState = {
   // Step 1 — Attendee
@@ -431,13 +530,29 @@ function StepAttendee({ form, update }: StepProps) {
             onChange={(e) => update("phone", e.target.value)}
           />
         </Field>
-        <Field label="State of Residence (e.g. MD for Maryland)">
-          <input
+        <Field label="State / Province / Territory of Residence">
+          <select
             className={inputCls}
             value={form.state}
             onChange={(e) => update("state", e.target.value)}
-            placeholder="MD"
-          />
+          >
+            <option value="">Select your location...</option>
+            <optgroup label="USA">
+              {PROVINCES.filter((p) => p.group === "USA").map((p) => (
+                <option key={p.value} value={p.value}>{p.value}</option>
+              ))}
+            </optgroup>
+            <optgroup label="Canada">
+              {PROVINCES.filter((p) => p.group === "Canada").map((p) => (
+                <option key={p.value} value={p.value}>{p.value}</option>
+              ))}
+            </optgroup>
+            <optgroup label="Caribbean & Central/South America">
+              {PROVINCES.filter((p) => p.group === "Caribbean").map((p) => (
+                <option key={p.value} value={p.value}>{p.value}</option>
+              ))}
+            </optgroup>
+          </select>
         </Field>
         <Field label="Is your spouse attending?">
           <YesNo
