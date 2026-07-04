@@ -147,6 +147,7 @@ type FormState = {
   name: string;
   email: string;
   phone: string;
+  country: "" | "USA" | "Canada" | "Caribbean";
   state: string;
   spouseAttending: "" | "yes" | "no";
   children: string;
@@ -179,6 +180,7 @@ function Index() {
     name: "",
     email: "",
     phone: "",
+    country: "",
     state: "",
     spouseAttending: "",
     children: "",
@@ -206,6 +208,7 @@ function Index() {
           name: form.name,
           email: form.email,
           phone: form.phone,
+          country: form.country,
           state: form.state,
           spouseAttending: form.spouseAttending,
           children: form.children,
@@ -530,30 +533,38 @@ function StepAttendee({ form, update }: StepProps) {
             onChange={(e) => update("phone", e.target.value)}
           />
         </Field>
-        <Field label="State / Province / Territory of Residence">
-          <select
-            className={inputCls}
-            value={form.state}
-            onChange={(e) => update("state", e.target.value)}
-          >
-            <option value="">Select your location...</option>
-            <optgroup label="USA">
-              {PROVINCES.filter((p) => p.group === "USA").map((p) => (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Field label="Country / Region">
+            <select
+              className={inputCls}
+              value={form.country}
+              onChange={(e) => {
+                update("country", e.target.value as FormState["country"]);
+                update("state", "");
+              }}
+            >
+              <option value="">Select country...</option>
+              <option value="USA">USA</option>
+              <option value="Canada">Canada</option>
+              <option value="Caribbean">Caribbean & Americas</option>
+            </select>
+          </Field>
+          <Field label="State / Province / Territory">
+            <select
+              className={inputCls}
+              value={form.state}
+              onChange={(e) => update("state", e.target.value)}
+              disabled={!form.country}
+            >
+              <option value="">
+                {form.country ? "Select..." : "Choose country first"}
+              </option>
+              {PROVINCES.filter((p) => p.group === form.country).map((p) => (
                 <option key={p.value} value={p.value}>{p.value}</option>
               ))}
-            </optgroup>
-            <optgroup label="Canada">
-              {PROVINCES.filter((p) => p.group === "Canada").map((p) => (
-                <option key={p.value} value={p.value}>{p.value}</option>
-              ))}
-            </optgroup>
-            <optgroup label="Caribbean & Central/South America">
-              {PROVINCES.filter((p) => p.group === "Caribbean").map((p) => (
-                <option key={p.value} value={p.value}>{p.value}</option>
-              ))}
-            </optgroup>
-          </select>
-        </Field>
+            </select>
+          </Field>
+        </div>
         <Field label="Is your spouse attending?">
           <YesNo
             name="spouseAttending"
@@ -846,7 +857,8 @@ function StepReview({
     ["Name", form.name || "—"],
     ["Email", form.email || "—"],
     ["Mobile phone", form.phone || "—"],
-    ["State of residence", form.state || "—"],
+    ["Country", form.country || "—"],
+    ["State / Province", form.state || "—"],
     ["Spouse attending", form.spouseAttending || "—"],
     ["Children", form.spouseAttending === "yes" ? form.children || "0" : "—"],
     ["Room preference", room],

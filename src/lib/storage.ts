@@ -8,6 +8,7 @@ export interface Registration {
   name: string;
   email: string;
   phone: string;
+  country: string;
   state: string;
   spouseAttending: "" | "yes" | "no";
   children: string;
@@ -37,6 +38,7 @@ type DbRow = {
   name: string;
   email: string;
   phone: string;
+  country: string;
   state: string;
   spouse_attending: string;
   children: string;
@@ -67,6 +69,7 @@ function toCamelCase(row: DbRow): Registration {
     name: row.name,
     email: row.email,
     phone: row.phone,
+    country: row.country ?? "",
     state: row.state,
     spouseAttending: row.spouse_attending as Registration["spouseAttending"],
     children: row.children,
@@ -116,6 +119,7 @@ export async function createRegistration(
       name: data.name,
       email: data.email,
       phone: data.phone,
+      country: data.country,
       state: data.state,
       spouse_attending: data.spouseAttending,
       children: data.children,
