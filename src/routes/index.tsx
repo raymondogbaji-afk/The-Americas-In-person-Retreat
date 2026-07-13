@@ -41,6 +41,7 @@ const fees: { id: Fee; label: string; price: number; note: string }[] = [
 
 const HOTEL_PHONE = "(410) 859-5700";
 const HOTEL_TOLL_FREE = "1-866-900-3517";
+const PAYPAL_LINK = "https://www.paypal.com/ncp/payment/UKUAZ3CXRFZ3A";
 
 const PROVINCES = [
   // USA
@@ -228,7 +229,8 @@ function Index() {
         },
       }),
     onSuccess: (reg) => {
-      navigate({ to: "/confirmation/$id", params: { id: reg.uniqueId } });
+      sessionStorage.setItem("lastRegId", reg.uniqueId);
+      window.location.href = PAYPAL_LINK;
     },
   });
 
