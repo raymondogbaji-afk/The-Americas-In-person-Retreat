@@ -1,8 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { useMutation } from "@tanstack/react-query";
-import { Loader2 } from "lucide-react";
-import { submitRegistration } from "@/lib/api";
 import {
   Calendar,
   MapPin,
@@ -12,6 +9,7 @@ import {
   CreditCard,
 } from "lucide-react";
 import heroImg from "@/assets/New Hero image.png";
+import { submitRegistration } from "@/lib/api";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -200,39 +198,48 @@ function Index() {
     consent: false,
   });
 
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
   const selected = useMemo(() => fees.find((f) => f.id === form.fee)!, [form.fee]);
 
-  const submitMutation = useMutation({
-    mutationFn: () =>
-      submitRegistration({
-        data: {
-          name: form.name,
-          email: form.email,
-          phone: form.phone,
-          country: form.country,
-          state: form.state,
-          spouseAttending: form.spouseAttending,
-          children: form.children,
-          roomPreference: form.roomPreference,
-          roomPreferenceOther: form.roomPreferenceOther,
-          accessibilityNeeds: form.accessibilityNeeds,
-          accessibilityDetails: form.accessibilityDetails,
-          dietary: form.dietary,
-          dietaryOther: form.dietaryOther,
-          willingTestimony: form.willingTestimony,
-          willingLead: form.willingLead,
-          hasTalent: form.hasTalent,
-          talentDetails: form.talentDetails,
-          fee: form.fee,
-          paymentMethod: form.paymentMethod,
-          consent: form.consent,
-        },
-      }),
-    onSuccess: (reg) => {
-      sessionStorage.setItem("lastRegId", reg.uniqueId);
-      window.location.href = PAYPAL_LINK;
-    },
-  });
+  const handleSubmit = () => {
+    setSubmitError(null);
+    submitRegistration({
+      data: {
+        name: form.name,
+        email: form.email,
+        phone: form.phone,
+        country: form.country,
+        state: form.state,
+        spouseAttending: form.spouseAttending || "no",
+        children: form.children,
+        roomPreference: form.roomPreference || "single",
+        roomPreferenceOther: form.roomPreferenceOther,
+        accessibilityNeeds: form.accessibilityNeeds || "no",
+        accessibilityDetails: form.accessibilityDetails,
+        dietary: form.dietary || "none",
+        dietaryOther: form.dietaryOther,
+        willingTestimony: form.willingTestimony || "no",
+        willingLead: form.willingLead || "no",
+        hasTalent: form.hasTalent || "no",
+        talentDetails: form.talentDetails,
+        fee: form.fee,
+        paymentMethod: form.paymentMethod || "paypal",
+        consent: form.consent,
+      },
+    })
+      .then((reg) => {
+        if (reg?.uniqueId) {
+          sessionStorage.setItem("lastRegId", reg.uniqueId);
+        }
+      })
+      .catch((err) => {
+        console.error("Registration save failed:", err);
+      })
+      .finally(() => {
+        window.location.href = PAYPAL_LINK;
+      });
+  };
 
   const update = <K extends keyof FormState>(k: K, v: FormState[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
@@ -332,6 +339,12 @@ function Index() {
                 {step === 4 && <StepPayment form={form} update={update} selected={selected} />}
                 {step === 5 && <StepReview form={form} selected={selected} />}
 
+                {submitError && (
+                  <div className="mt-4 p-3 rounded-md bg-destructive/10 border border-destructive/20 text-destructive text-sm">
+                    {submitError}
+                  </div>
+                )}
+
                 <div className="flex justify-between mt-8 pt-6 border-t border-border">
                   <button
                     type="button"
@@ -352,17 +365,10 @@ function Index() {
                   ) : (
                     <button
                       type="button"
-                      disabled={submitMutation.isPending}
-                      onClick={() => submitMutation.mutate()}
-                      className="inline-flex items-center gap-2 px-5 py-2 rounded-md bg-accent text-accent-foreground font-semibold hover:brightness-105 disabled:opacity-60"
+                      onClick={handleSubmit}
+                      className="inline-flex items-center gap-2 px-5 py-2 rounded-md bg-accent text-accent-foreground font-semibold hover:brightness-105"
                     >
-                      {submitMutation.isPending ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" /> Submitting...
-                        </>
-                      ) : (
-                        <>Register — ${selected.price}</>
-                      )}
+                      Register — ${selected.price}
                     </button>
                   )}
                 </div>
