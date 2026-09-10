@@ -39,17 +39,19 @@ function AdminDashboard() {
   const [search, setSearch] = useState("");
   const queryClient = useQueryClient();
 
-  const { data: registrations = [] } = useQuery({
+  const { data: registrations = [], error: regError } = useQuery({
     queryKey: ["registrations"],
     queryFn: () => listRegistrations(),
     refetchInterval: 10000,
   });
 
-  const { data: stats } = useQuery({
+  const { data: stats, error: statsError } = useQuery({
     queryKey: ["registration-stats"],
     queryFn: () => getStats(),
     refetchInterval: 10000,
   });
+
+  const queryError = regError || statsError;
 
   const markPaidMutation = useMutation({
     mutationFn: (id: string) => markPaid({ data: { id } }),
@@ -154,6 +156,12 @@ function AdminDashboard() {
       </header>
 
       <main className="container mx-auto px-4 py-8">
+        {queryError && (
+          <div className="mb-6 p-4 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm">
+            <p className="font-semibold mb-1">Failed to load data</p>
+            <p className="text-xs opacity-80">{queryError.message}</p>
+          </div>
+        )}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <Card>
             <CardHeader className="pb-2">

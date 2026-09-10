@@ -141,7 +141,10 @@ export async function createRegistration(
     .select()
     .single();
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    console.error("Supabase createRegistration error:", error);
+    throw new Error(error.message);
+  }
   return toCamelCase(row as DbRow);
 }
 
@@ -162,7 +165,10 @@ export async function getAllRegistrations(): Promise<Registration[]> {
     .select()
     .order("created_at", { ascending: false });
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    console.error("Supabase getAllRegistrations error:", error);
+    throw new Error(error.message);
+  }
   return (data as DbRow[]).map(toCamelCase);
 }
 
