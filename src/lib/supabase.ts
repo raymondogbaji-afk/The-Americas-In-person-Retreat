@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { neon } from "@neondatabase/serverless";
 
 function getEnv(key: string): string {
   if (typeof process !== "undefined" && process.env && process.env[key]) {
@@ -10,7 +10,6 @@ function getEnv(key: string): string {
   throw new Error(`Missing environment variable: ${key}`);
 }
 
-const url = getEnv("VITE_SUPABASE_URL");
-const key = getEnv("VITE_SUPABASE_ANON_KEY");
+const databaseUrl = getEnv("DATABASE_URL");
 
-export const supabase = createClient(url, key);
+export const sql = neon(databaseUrl);

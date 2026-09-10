@@ -1,4 +1,4 @@
-import { supabase } from "./supabase";
+import { sql } from "./supabase";
 
 export type PaymentStatus = "pending" | "paid";
 
@@ -112,92 +112,75 @@ export async function createRegistration(
   },
 ): Promise<Registration> {
   const uniqueId = generateId();
-  const { data: row, error } = await supabase
-    .from("registrations")
-    .insert({
-      unique_id: uniqueId,
-      name: data.name,
-      email: data.email,
-      phone: data.phone,
-      country: data.country,
-      state: data.state,
-      spouse_attending: data.spouseAttending,
-      children: data.children,
-      room_preference: data.roomPreference,
-      room_preference_other: data.roomPreferenceOther,
-      accessibility_needs: data.accessibilityNeeds,
-      accessibility_details: data.accessibilityDetails,
-      dietary: data.dietary,
-      dietary_other: data.dietaryOther,
-      willing_testimony: data.willingTestimony,
-      willing_lead: data.willingLead,
-      has_talent: data.hasTalent,
-      talent_details: data.talentDetails,
-      fee: data.fee,
-      payment_method: data.paymentMethod,
-      payment_status: "pending",
-      consent: data.consent ?? false,
-    })
-    .select()
-    .single();
-
-  if (error) {
-    console.error("Supabase createRegistration error:", error);
-    throw new Error(error.message);
-  }
-  return toCamelCase(row as DbRow);
+  const rows = await sql`
+    INSERT INTO registrations (
+      unique_id, name, email, phone, country, state,
+      spouse_attending, children,
+      room_preference, room_preference_other,
+      accessibility_needs, accessibility_details,
+      dietary, dietary_other,
+      willing_testimony, willing_lead,
+      has_talent, talent_details,
+      fee, payment_method, payment_status, consent
+    ) VALUES (
+      ${uniqueId}, ${data.name}, ${data.email}, ${data.phone}, ${data.country}, ${data.state},
+      ${data.spouseAttending}, ${data.children},
+      ${data.roomPreference}, ${data.roomPreferenceOther},
+      ${data.accessibilityNeeds}, ${data.accessibilityDetails},
+      ${data.dietary}, ${data.dietaryOther},
+      ${data.willingTestimony}, ${data.willingLead},
+      ${data.hasTalent}, ${data.talentDetails},
+      ${data.fee}, ${data.paymentMethod}, 'pending', ${data.consent ?? false}
+    )
+    RETURNING *
+  `;
+  return toCamelCase(rows[0] as DbRow);
 }
 
 export async function getRegistrationById(id: string): Promise<Registration | null> {
-  const { data, error } = await supabase
-    .from("registrations")
-    .select()
-    .eq("unique_id", id)
-    .single();
-
-  if (error || !data) return null;
-  return toCamelCase(data as DbRow);
+  const rows = await sql`SELECT * FROM registrations WHERE unique_id = ${id}`;
+  if (rows.length === 0) return null;
+  return toCamelCase(rows[0] as DbRow);
 }
 
 export async function getAllRegistrations(): Promise<Registration[]> {
-  const { data, error } = await supabase
-    .from("registrations")
-    .select()
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    console.error("Supabase getAllRegistrations error:", error);
-    throw new Error(error.message);
-  }
-  return (data as DbRow[]).map(toCamelCase);
+  const rows = await sql`SELECT * FROM registrations ORDER BY created_at DESC`;
+  return (rows as unknown as DbRow[]).map(toCamelCase);
 }
 
 export async function markCheckedIn(id: string): Promise<Registration | null> {
-  const { data, error } = await supabase
-    .from("registrations")
-    .update({ checked_in: true, checked_in_at: new Date().toISOString() })
-    .eq("unique_id", id)
-    .select()
-    .single();
-
-  if (error || !data) return null;
-  return toCamelCase(data as DbRow);
+  const rows = await sql`
+    UPDATE registrations
+    SET checked_in = true, checked_in_at = ${new Date().toISOString()}
+    WHERE unique_id = ${id}
+    RETURNING *
+  `;
+  if (rows.length === 0) return null;
+  return toCamelCase(rows[0] as DbRow);
 }
 
 export async function markAsPaid(
   uniqueId: string,
   paypalTransactionId?: string,
 ): Promise<Registration | null> {
-  const updates: Record<string, unknown> = { payment_status: "paid" };
-  if (paypalTransactionId) updates.paypal_transaction_id = paypalTransactionId;
-  const { data, error } = await supabase
-    .from("registrations")
-    .update(updates)
-    .eq("unique_id", uniqueId)
-    .select()
-    .single();
-  if (error || !data) return null;
-  return toCamelCase(data as DbRow);
+  let rows;
+  if (paypalTransactionId) {
+    rows = await sql`
+      UPDATE registrations
+      SET payment_status = 'paid', paypal_transaction_id = ${paypalTransactionId}
+      WHERE unique_id = ${uniqueId}
+      RETURNING *
+    `;
+  } else {
+    rows = await sql`
+      UPDATE registrations
+      SET payment_status = 'paid'
+      WHERE unique_id = ${uniqueId}
+      RETURNING *
+    `;
+  }
+  if (rows.length === 0) return null;
+  return toCamelCase(rows[0] as DbRow);
 }
 
 export async function getRegistrationStats(): Promise<{
@@ -209,14 +192,24 @@ export async function getRegistrationStats(): Promise<{
   single: number;
   couple: number;
 }> {
-  const all = await getAllRegistrations();
-  return {
-    total: all.length,
-    checkedIn: all.filter((r) => r.checkedIn).length,
-    pending: all.filter((r) => !r.checkedIn).length,
-    paid: all.filter((r) => r.paymentStatus === "paid").length,
-    unpaid: all.filter((r) => r.paymentStatus === "pending").length,
-    single: all.filter((r) => r.fee === "single").length,
-    couple: all.filter((r) => r.fee === "couple").length,
+  const rows = await sql`
+    SELECT
+      COUNT(*)::int AS total,
+      COUNT(*) FILTER (WHERE checked_in = true)::int AS "checkedIn",
+      COUNT(*) FILTER (WHERE checked_in = false)::int AS pending,
+      COUNT(*) FILTER (WHERE payment_status = 'paid')::int AS paid,
+      COUNT(*) FILTER (WHERE payment_status = 'pending')::int AS unpaid,
+      COUNT(*) FILTER (WHERE fee = 'single')::int AS single,
+      COUNT(*) FILTER (WHERE fee = 'couple')::int AS couple
+    FROM registrations
+  `;
+  return rows[0] as unknown as {
+    total: number;
+    checkedIn: number;
+    pending: number;
+    paid: number;
+    unpaid: number;
+    single: number;
+    couple: number;
   };
 }
