@@ -232,12 +232,11 @@ function Index() {
         if (reg?.uniqueId) {
           sessionStorage.setItem("lastRegId", reg.uniqueId);
         }
+        window.location.href = PAYPAL_LINK;
       })
       .catch((err) => {
         console.error("Registration save failed:", err);
-      })
-      .finally(() => {
-        window.location.href = PAYPAL_LINK;
+        setSubmitError("Registration failed to save. Please try again.");
       });
   };
 
