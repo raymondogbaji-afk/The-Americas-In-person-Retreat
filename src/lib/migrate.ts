@@ -41,9 +41,12 @@ async function migrate() {
       consent BOOLEAN NOT NULL DEFAULT false,
       checked_in BOOLEAN NOT NULL DEFAULT false,
       checked_in_at TIMESTAMPTZ,
+      email_sent_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `;
+
+  await sql`ALTER TABLE registrations ADD COLUMN IF NOT EXISTS email_sent_at TIMESTAMPTZ`;
 
   console.log("Table created successfully!");
 }

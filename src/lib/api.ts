@@ -6,16 +6,25 @@ import {
   markCheckedIn,
   markAsPaid,
   getRegistrationStats,
+  getRegistrationsForQrEmail,
+  markQrEmailsSent,
+  getQrEmailStatus as getQrEmailStatusData,
   type Registration,
 } from "./storage";
-import { sendConfirmationEmail } from "./email";
+import { sendConfirmationEmail, sendQrEmail } from "./email";
 
 export const submitRegistration = createServerFn({ method: "POST" })
   .validator(
     (data: unknown) =>
       data as Omit<
         Registration,
-        "id" | "uniqueId" | "paymentStatus" | "paypalTransactionId" | "checkedIn" | "checkedInAt" | "createdAt"
+        | "id"
+        | "uniqueId"
+        | "paymentStatus"
+        | "paypalTransactionId"
+        | "checkedIn"
+        | "checkedInAt"
+        | "createdAt"
       >,
   )
   .handler(async ({ data }) => {
@@ -51,3 +60,43 @@ export const checkInAttendee = createServerFn({ method: "POST" })
 export const getStats = createServerFn({ method: "GET" }).handler(async () => {
   return getRegistrationStats();
 });
+
+export const getQrEmailStatus = createServerFn({ method: "GET" }).handler(async () => {
+  return getQrEmailStatusData();
+});
+
+export const sendQrEmailBatch = createServerFn({ method: "POST" })
+  .validator((data: unknown) => data as { force?: boolean; limit?: number; offset?: number })
+  .handler(async ({ data }) => {
+    const force = data.force ?? false;
+    const limit = Math.min(Math.max(data.limit ?? 10, 1), 25);
+    const offset = data.offset ?? 0;
+
+    const regs = await getRegistrationsForQrEmail(force, limit, offset);
+
+    const sent: string[] = [];
+    const failed: { uniqueId: string; email: string; error: string }[] = [];
+
+    for (const reg of regs) {
+      try {
+        await sendQrEmail(reg);
+        sent.push(reg.uniqueId);
+      } catch (err) {
+        console.error(`QR email failed for ${reg.email}:`, err);
+        failed.push({
+          uniqueId: reg.uniqueId,
+          email: reg.email,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+      await new Promise((resolve) => setTimeout(resolve, 550));
+    }
+
+    if (!force) {
+      await markQrEmailsSent(sent);
+    }
+
+    const remaining = force ? 0 : (await getQrEmailStatusData()).pending;
+
+    return { sent: sent.length, failed, remaining, processed: regs.length };
+  });

@@ -13,8 +13,17 @@ import {
   DollarSign,
   Loader2,
   Mail,
+  Send,
+  AlertCircle,
+  CheckCircle2,
 } from "lucide-react";
-import { listRegistrations, getStats, markPaid } from "@/lib/api";
+import {
+  listRegistrations,
+  getStats,
+  markPaid,
+  getQrEmailStatus,
+  sendQrEmailBatch,
+} from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,6 +46,16 @@ export const Route = createFileRoute("/admin/")({
 
 function AdminDashboard() {
   const [search, setSearch] = useState("");
+  const [resendAll, setResendAll] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [progress, setProgress] = useState<{ sent: number; failed: number; total: number } | null>(
+    null,
+  );
+  const [emailResult, setEmailResult] = useState<{
+    sent: number;
+    failed: number;
+    errors: string[];
+  } | null>(null);
   const queryClient = useQueryClient();
 
   const { data: registrations = [], error: regError } = useQuery({
@@ -51,6 +70,12 @@ function AdminDashboard() {
     refetchInterval: 10000,
   });
 
+  const { data: qrStatus } = useQuery({
+    queryKey: ["qr-email-status"],
+    queryFn: () => getQrEmailStatus(),
+    refetchInterval: 10000,
+  });
+
   const queryError = regError || statsError;
 
   const markPaidMutation = useMutation({
@@ -60,6 +85,56 @@ function AdminDashboard() {
       queryClient.invalidateQueries({ queryKey: ["registration-stats"] });
     },
   });
+
+  const sendAllQrEmails = async () => {
+    const total = resendAll ? (qrStatus?.total ?? 0) : (qrStatus?.pending ?? 0);
+    if (total === 0) return;
+    if (
+      resendAll &&
+      !window.confirm(`Resend QR emails to ALL ${total} participants? This cannot be undone.`)
+    ) {
+      return;
+    }
+
+    const limit = 8;
+    let offset = 0;
+    let sentTotal = 0;
+    let failedTotal = 0;
+    const errors: string[] = [];
+
+    setSending(true);
+    setEmailResult(null);
+    setProgress({ sent: 0, failed: 0, total });
+
+    try {
+      while (true) {
+        const res = await sendQrEmailBatch({ data: { force: resendAll, limit, offset } });
+        sentTotal += res.sent;
+        failedTotal += res.failed.length;
+        for (const f of res.failed) errors.push(`${f.email}: ${f.error}`);
+        setProgress({ sent: sentTotal, failed: failedTotal, total });
+
+        if (resendAll) {
+          offset += limit;
+          if (res.processed < limit) break;
+        } else {
+          if (res.remaining === 0 || res.sent === 0) break;
+        }
+      }
+      setEmailResult({ sent: sentTotal, failed: failedTotal, errors });
+    } catch (err) {
+      setEmailResult({
+        sent: sentTotal,
+        failed: failedTotal + 1,
+        errors: [...errors, err instanceof Error ? err.message : String(err)],
+      });
+    } finally {
+      setSending(false);
+      setProgress(null);
+      queryClient.invalidateQueries({ queryKey: ["qr-email-status"] });
+      queryClient.invalidateQueries({ queryKey: ["registrations"] });
+    }
+  };
 
   const paidCount = registrations.filter((r) => r.paymentStatus === "paid").length;
 
@@ -210,19 +285,83 @@ function AdminDashboard() {
         </div>
 
         <div className="bg-card border border-border rounded-2xl shadow-sm">
-          <div className="p-4 sm:p-6 border-b border-border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div className="relative w-full sm:w-72">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Search by name, email or ID..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-9"
-              />
+          <div className="p-4 sm:p-6 border-b border-border space-y-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="relative w-full sm:w-72">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search by name, email or ID..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="flex items-center gap-2 text-xs text-muted-foreground select-none">
+                  <input
+                    type="checkbox"
+                    checked={resendAll}
+                    onChange={(e) => setResendAll(e.target.checked)}
+                    disabled={sending}
+                    className="h-4 w-4 rounded border-input accent-primary"
+                  />
+                  Resend to everyone
+                </label>
+                <Button
+                  size="sm"
+                  onClick={sendAllQrEmails}
+                  disabled={sending || (!resendAll && (qrStatus?.pending ?? 0) === 0)}
+                >
+                  {sending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Send className="w-4 h-4" />
+                  )}
+                  {resendAll ? "Resend QR Emails" : `Send QR Emails (${qrStatus?.pending ?? 0})`}
+                </Button>
+                <Button variant="outline" size="sm" onClick={exportCsv}>
+                  <Download className="w-4 h-4" /> Export CSV
+                </Button>
+              </div>
             </div>
-            <Button variant="outline" size="sm" onClick={exportCsv}>
-              <Download className="w-4 h-4" /> Export CSV
-            </Button>
+
+            {progress && (
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-primary/10 border border-primary/20 text-primary text-sm">
+                <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                Sending QR emails… {progress.sent} sent
+                {progress.failed > 0 ? `, ${progress.failed} failed` : ""} of {progress.total}
+              </div>
+            )}
+
+            {emailResult && !sending && (
+              <div
+                className={`p-3 rounded-lg border text-sm ${
+                  emailResult.failed > 0
+                    ? "bg-destructive/10 border-destructive/20 text-destructive"
+                    : "bg-success/10 border-success/20 text-success"
+                }`}
+              >
+                <p className="flex items-center gap-2 font-semibold">
+                  {emailResult.failed > 0 ? (
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                  ) : (
+                    <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  )}
+                  {emailResult.sent} email{emailResult.sent !== 1 ? "s" : ""} sent
+                  {emailResult.failed > 0 ? `, ${emailResult.failed} failed` : ""}.
+                </p>
+                {emailResult.errors.length > 0 && (
+                  <ul className="mt-1 ml-6 list-disc text-xs opacity-90 space-y-0.5">
+                    {emailResult.errors.slice(0, 8).map((err, i) => (
+                      <li key={i}>{err}</li>
+                    ))}
+                    {emailResult.errors.length > 8 && (
+                      <li>…and {emailResult.errors.length - 8} more</li>
+                    )}
+                  </ul>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="overflow-x-auto">
@@ -236,13 +375,14 @@ function AdminDashboard() {
                   <TableHead>Payment</TableHead>
                   <TableHead>Payment Status</TableHead>
                   <TableHead>Check-In</TableHead>
+                  <TableHead>QR Email</TableHead>
                   <TableHead>Registered</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
                       {search ? "No registrations match your search." : "No registrations yet."}
                     </TableCell>
                   </TableRow>
@@ -293,6 +433,18 @@ function AdminDashboard() {
                         </Badge>
                       ) : (
                         <Badge variant="outline">—</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {reg.emailSentAt ? (
+                        <Badge
+                          variant="default"
+                          className="bg-success/10 text-success hover:bg-success/15"
+                        >
+                          Sent
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline">Pending</Badge>
                       )}
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">

@@ -29,6 +29,7 @@ export interface Registration {
   consent: boolean;
   checkedIn: boolean;
   checkedInAt: string | null;
+  emailSentAt: string | null;
   createdAt: string;
 }
 
@@ -59,6 +60,7 @@ type DbRow = {
   consent: boolean;
   checked_in: boolean;
   checked_in_at: string | null;
+  email_sent_at: string | null;
   created_at: string;
 };
 
@@ -90,6 +92,7 @@ function toCamelCase(row: DbRow): Registration {
     consent: row.consent,
     checkedIn: row.checked_in,
     checkedInAt: row.checked_in_at,
+    emailSentAt: row.email_sent_at,
     createdAt: row.created_at,
   };
 }
@@ -106,7 +109,13 @@ function generateId(): string {
 export async function createRegistration(
   data: Omit<
     Registration,
-    "id" | "uniqueId" | "paymentStatus" | "paypalTransactionId" | "checkedIn" | "checkedInAt" | "createdAt"
+    | "id"
+    | "uniqueId"
+    | "paymentStatus"
+    | "paypalTransactionId"
+    | "checkedIn"
+    | "checkedInAt"
+    | "createdAt"
   > & {
     consent?: boolean;
   },
@@ -212,4 +221,44 @@ export async function getRegistrationStats(): Promise<{
     single: number;
     couple: number;
   };
+}
+
+export async function getRegistrationsForQrEmail(
+  force: boolean,
+  limit: number,
+  offset = 0,
+): Promise<Registration[]> {
+  const rows = force
+    ? await sql`
+        SELECT * FROM registrations
+        WHERE email <> ''
+        ORDER BY created_at
+        LIMIT ${limit} OFFSET ${offset}
+      `
+    : await sql`
+        SELECT * FROM registrations
+        WHERE email <> '' AND email_sent_at IS NULL
+        ORDER BY created_at
+        LIMIT ${limit}
+      `;
+  return (rows as unknown as DbRow[]).map(toCamelCase);
+}
+
+export async function markQrEmailsSent(uniqueIds: string[]): Promise<void> {
+  if (uniqueIds.length === 0) return;
+  await sql`
+    UPDATE registrations
+    SET email_sent_at = NOW()
+    WHERE unique_id = ANY(${uniqueIds})
+  `;
+}
+
+export async function getQrEmailStatus(): Promise<{ pending: number; total: number }> {
+  const rows = await sql`
+    SELECT
+      COUNT(*) FILTER (WHERE email <> '' AND email_sent_at IS NULL)::int AS pending,
+      COUNT(*) FILTER (WHERE email <> '')::int AS total
+    FROM registrations
+  `;
+  return rows[0] as unknown as { pending: number; total: number };
 }
