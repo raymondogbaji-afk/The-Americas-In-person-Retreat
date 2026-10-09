@@ -106,7 +106,8 @@ function CheckInPage() {
               if (scanTimerRef.current) clearTimeout(scanTimerRef.current);
               scanTimerRef.current = setTimeout(() => {
                 scanTimerRef.current = null;
-                checkInMutation.mutate(data.id as string);
+                setProcessing(false);
+                setResult(data);
               }, 3500);
             } else {
               setError("Invalid QR code format.");
