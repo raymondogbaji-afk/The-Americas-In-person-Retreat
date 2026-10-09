@@ -17,6 +17,7 @@ import {
   AlertCircle,
   CheckCircle2,
   RefreshCw,
+  Trash2,
 } from "lucide-react";
 import {
   listRegistrations,
@@ -25,6 +26,7 @@ import {
   getQrEmailStatus,
   sendQrEmailBatch,
   resendQrEmail,
+  deleteRegistration,
 } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -58,6 +60,7 @@ function AdminDashboard() {
     failed: number;
     errors: string[];
   } | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   const { data: registrations = [], error: regError } = useQuery({
@@ -103,6 +106,26 @@ function AdminDashboard() {
       });
     },
   });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteRegistration({ data: id }),
+    onSuccess: () => {
+      setDeleteError(null);
+      queryClient.invalidateQueries({ queryKey: ["registrations"] });
+      queryClient.invalidateQueries({ queryKey: ["registration-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["qr-email-status"] });
+    },
+    onError: (err) => {
+      setDeleteError(err instanceof Error ? err.message : String(err));
+    },
+  });
+
+  const handleDelete = (id: string, name: string) => {
+    if (!window.confirm(`Delete registration for ${name} (${id})? This cannot be undone.`)) {
+      return;
+    }
+    deleteMutation.mutate(id);
+  };
 
   const sendAllQrEmails = async () => {
     const total = resendAll ? (qrStatus?.total ?? 0) : (qrStatus?.pending ?? 0);
@@ -380,6 +403,12 @@ function AdminDashboard() {
                 )}
               </div>
             )}
+
+            {deleteError && (
+              <div className="p-3 rounded-lg border bg-destructive/10 border-destructive/20 text-destructive text-sm flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" /> {deleteError}
+              </div>
+            )}
           </div>
 
           <div className="overflow-x-auto">
@@ -395,12 +424,13 @@ function AdminDashboard() {
                   <TableHead>Check-In</TableHead>
                   <TableHead>QR Email</TableHead>
                   <TableHead>Registered</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={10} className="text-center py-12 text-muted-foreground">
                       {search ? "No registrations match your search." : "No registrations yet."}
                     </TableCell>
                   </TableRow>
@@ -488,6 +518,24 @@ function AdminDashboard() {
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
                       {new Date(reg.createdAt).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
+                        disabled={
+                          deleteMutation.isPending && deleteMutation.variables === reg.uniqueId
+                        }
+                        onClick={() => handleDelete(reg.uniqueId, reg.name)}
+                        title="Delete registration"
+                      >
+                        {deleteMutation.isPending && deleteMutation.variables === reg.uniqueId ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Trash2 className="w-3.5 h-3.5" />
+                        )}
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}

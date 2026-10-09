@@ -9,6 +9,7 @@ import {
   getRegistrationsForQrEmail,
   markQrEmailsSent,
   getQrEmailStatus as getQrEmailStatusData,
+  deleteRegistration as deleteRegistrationData,
   type Registration,
 } from "./storage";
 import { sendConfirmationEmail, sendQrEmail } from "./email";
@@ -99,6 +100,14 @@ export const sendQrEmailBatch = createServerFn({ method: "POST" })
     const remaining = force ? 0 : (await getQrEmailStatusData()).pending;
 
     return { sent: sent.length, failed, remaining, processed: regs.length };
+  });
+
+export const deleteRegistration = createServerFn({ method: "POST" })
+  .validator((id: unknown) => id as string)
+  .handler(async ({ data: id }) => {
+    const deleted = await deleteRegistrationData(id);
+    if (!deleted) throw new Error("Registration not found");
+    return { uniqueId: id };
   });
 
 export const resendQrEmail = createServerFn({ method: "POST" })

@@ -157,6 +157,15 @@ export async function getAllRegistrations(): Promise<Registration[]> {
   return (rows as unknown as DbRow[]).map(toCamelCase);
 }
 
+export async function deleteRegistration(uniqueId: string): Promise<boolean> {
+  const rows = await sql`
+    DELETE FROM registrations
+    WHERE unique_id = ${uniqueId}
+    RETURNING id
+  `;
+  return rows.length > 0;
+}
+
 export async function markCheckedIn(id: string): Promise<Registration | null> {
   const rows = await sql`
     UPDATE registrations
