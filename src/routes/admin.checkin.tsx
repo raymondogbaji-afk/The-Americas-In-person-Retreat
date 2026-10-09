@@ -41,8 +41,10 @@ function CheckInPage() {
     alreadyCheckedIn: boolean;
   } | null>(null);
   const [manualId, setManualId] = useState("");
+  const [processing, setProcessing] = useState(false);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const scannerDivRef = useRef<HTMLDivElement>(null);
+  const scanTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const queryClient = useQueryClient();
 
   const { data: registrations = [] } = useQuery({
@@ -62,6 +64,7 @@ function CheckInPage() {
   const checkInMutation = useMutation({
     mutationFn: (id: string) => checkInAttendee({ data: id }),
     onSuccess: (reg) => {
+      setProcessing(false);
       if (reg) {
         setCheckedInReg({ name: reg.name, uniqueId: reg.uniqueId, alreadyCheckedIn: false });
         setResult(null);
@@ -70,6 +73,7 @@ function CheckInPage() {
       }
     },
     onError: () => {
+      setProcessing(false);
       setError("Failed to check in. Please try again.");
     },
   });
@@ -97,7 +101,13 @@ function CheckInPage() {
             const data = JSON.parse(decodedText);
             if (data.id) {
               scanner.pause();
-              setResult(data);
+              setError(null);
+              setProcessing(true);
+              if (scanTimerRef.current) clearTimeout(scanTimerRef.current);
+              scanTimerRef.current = setTimeout(() => {
+                scanTimerRef.current = null;
+                checkInMutation.mutate(data.id as string);
+              }, 3500);
             } else {
               setError("Invalid QR code format.");
             }
@@ -114,6 +124,11 @@ function CheckInPage() {
   };
 
   const stopScanner = async () => {
+    if (scanTimerRef.current) {
+      clearTimeout(scanTimerRef.current);
+      scanTimerRef.current = null;
+    }
+    setProcessing(false);
     if (scannerRef.current) {
       try {
         await scannerRef.current.stop();
@@ -128,6 +143,10 @@ function CheckInPage() {
 
   useEffect(() => {
     return () => {
+      if (scanTimerRef.current) {
+        clearTimeout(scanTimerRef.current);
+        scanTimerRef.current = null;
+      }
       if (scannerRef.current) {
         try {
           scannerRef.current.stop();
@@ -160,6 +179,11 @@ function CheckInPage() {
   };
 
   const reset = () => {
+    if (scanTimerRef.current) {
+      clearTimeout(scanTimerRef.current);
+      scanTimerRef.current = null;
+    }
+    setProcessing(false);
     setResult(null);
     setError(null);
     setCheckedInReg(null);
@@ -307,11 +331,20 @@ function CheckInPage() {
                   )}
                 </div>
 
-                <div
-                  id="qr-scanner"
-                  ref={scannerDivRef}
-                  className={`w-full aspect-video bg-muted rounded-lg overflow-hidden flex items-center justify-center ${scanning ? "" : "hidden"}`}
-                />
+                <div className="relative">
+                  <div
+                    id="qr-scanner"
+                    ref={scannerDivRef}
+                    className={`w-full aspect-video bg-muted rounded-lg overflow-hidden flex items-center justify-center ${scanning ? "" : "hidden"}`}
+                  />
+                  {processing && (
+                    <div className="absolute inset-0 bg-background/85 backdrop-blur-sm rounded-lg flex flex-col items-center justify-center">
+                      <Loader2 className="w-10 h-10 animate-spin text-primary mb-3" />
+                      <p className="text-sm font-medium">Checking in…</p>
+                      <p className="text-xs text-muted-foreground mt-1">Please wait</p>
+                    </div>
+                  )}
+                </div>
 
                 {!scanning ? (
                   <div className="text-center py-12">
@@ -322,6 +355,14 @@ function CheckInPage() {
                     <Button onClick={startScanner}>
                       <Camera className="w-4 h-4" /> Start Camera Scanner
                     </Button>
+                  </div>
+                ) : processing ? (
+                  <div className="text-center py-8">
+                    <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-3" />
+                    <p className="text-sm font-medium">Verifying attendee…</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Checking them in, please wait.
+                    </p>
                   </div>
                 ) : (
                   <div className="text-center">
