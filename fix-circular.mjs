@@ -20,10 +20,16 @@ if (!runtimeBlockMatch) { console.error("Cannot find runtime block"); process.ex
 const runtimeBlock = runtimeBlockMatch[1].trim();
 console.log("Runtime block:", runtimeBlock.length, "bytes");
 
-// The runtime exports are: _ => __toESM, g => __require, h => __commonJSMin
-const runtimeExports = new Set(["_", "g", "h"]);
+// Identifiers the runtime block defines (__create, __toESM, __commonJSMin, ...).
+// Derive them from the block itself instead of hardcoding the bundler's
+// export aliases, which change between versions.
+const runtimeDefined = new Set(
+  [...runtimeBlock.matchAll(/\bvar\s+(__\w+)/g)].map((m) => m[1]),
+);
+if (runtimeDefined.size === 0) { console.error("No runtime identifiers found in block"); process.exit(1); }
+console.log("Runtime identifiers:", [...runtimeDefined].join(", "));
 
-// Files that use __require also need createRequire
+// The runtime block calls createRequire(import.meta.url)
 const needsCreateRequire = "import { createRequire } from \"node:module\";\n";
 
 function processFile(fp) {
@@ -39,24 +45,26 @@ function processFile(fp) {
   const items = m[1].split(",").map(s => s.trim()).filter(Boolean);
   const path = m[2];
 
-  // Check if any runtime exports are in this import
-  const hasRuntime = items.some(i => {
-    const alias = i.split(/\s+as\s+/)[0].trim();
-    return runtimeExports.has(alias);
-  });
-  if (!hasRuntime) return false;
-
-  // Separate runtime vs non-runtime
-  const nonRuntimeItems = items.filter(i => {
-    const alias = i.split(/\s+as\s+/)[0].trim();
-    return !runtimeExports.has(alias);
-  });
+  // A runtime identifier is imported when the LOCAL binding name (the part
+  // after `as`) matches something the inline block defines. These are dropped
+  // from the import (and instead provided by the inlined block) to avoid both
+  // the circular-init bug and duplicate declarations.
+  let usesRuntime = false;
+  const nonRuntimeItems = [];
+  for (const item of items) {
+    const parts = item.split(/\s+as\s+/);
+    const local = (parts[1] ?? parts[0]).trim();
+    if (runtimeDefined.has(local)) usesRuntime = true;
+    else nonRuntimeItems.push(item);
+  }
+  if (!usesRuntime) return false;
 
   // Remove old import
   c = c.replace(re, "");
 
-  // Build replacement (always add createRequire since runtime block has __require)
-  let head = needsCreateRequire + runtimeBlock + "\n";
+  // Build replacement (add createRequire only if the file doesn't have it)
+  const hasCreateRequire = /import\s*\{\s*createRequire\s*\}\s*from\s*"node:module"/.test(c);
+  let head = (hasCreateRequire ? "" : needsCreateRequire) + runtimeBlock + "\n";
 
   if (nonRuntimeItems.length > 0) {
     head += "import {" + nonRuntimeItems.join(", ") + "} from \"" + path + "\";\n";
