@@ -11,8 +11,8 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
-import { Route as ConfirmationIdRouteImport } from './routes/confirmation.$id'
 import { Route as AdminCheckinRouteImport } from './routes/admin.checkin'
+import { Route as ConfirmationIdRouteImport } from './routes/confirmation.$id'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -24,14 +24,14 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
   path: '/admin/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ConfirmationIdRoute = ConfirmationIdRouteImport.update({
-  id: '/confirmation/$id',
-  path: '/confirmation/$id',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const AdminCheckinRoute = AdminCheckinRouteImport.update({
   id: '/admin/checkin',
   path: '/admin/checkin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConfirmationIdRoute = ConfirmationIdRouteImport.update({
+  id: '/confirmation/$id',
+  path: '/confirmation/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -85,18 +85,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/confirmation/$id': {
-      id: '/confirmation/$id'
-      path: '/confirmation/$id'
-      fullPath: '/confirmation/$id'
-      preLoaderRoute: typeof ConfirmationIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/admin/checkin': {
       id: '/admin/checkin'
       path: '/admin/checkin'
       fullPath: '/admin/checkin'
       preLoaderRoute: typeof AdminCheckinRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/confirmation/$id': {
+      id: '/confirmation/$id'
+      path: '/confirmation/$id'
+      fullPath: '/confirmation/$id'
+      preLoaderRoute: typeof ConfirmationIdRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
