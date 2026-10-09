@@ -18,6 +18,8 @@ import {
   CheckCircle2,
   RefreshCw,
   Trash2,
+  QrCode,
+  Printer,
 } from "lucide-react";
 import {
   listRegistrations,
@@ -28,9 +30,18 @@ import {
   resendQrEmail,
   deleteRegistration,
 } from "@/lib/api";
+import { buildQrDataUrl } from "@/lib/qr";
+import type { Registration } from "@/lib/storage";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Table,
   TableBody,
@@ -61,6 +72,8 @@ function AdminDashboard() {
     errors: string[];
   } | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [qrPreview, setQrPreview] = useState<{ reg: Registration; dataUrl: string } | null>(null);
+  const [qrLoadingId, setQrLoadingId] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   const { data: registrations = [], error: regError } = useQuery({
@@ -125,6 +138,43 @@ function AdminDashboard() {
       return;
     }
     deleteMutation.mutate(id);
+  };
+
+  const openQrPreview = async (reg: Registration) => {
+    setQrLoadingId(reg.uniqueId);
+    try {
+      const dataUrl = await buildQrDataUrl(reg.uniqueId);
+      setQrPreview({ reg, dataUrl });
+    } catch {
+      setDeleteError("Could not generate a QR code for this attendee.");
+    } finally {
+      setQrLoadingId(null);
+    }
+  };
+
+  const printQrCode = () => {
+    if (!qrPreview) return;
+    const { reg, dataUrl } = qrPreview;
+    const escape = (value: string) =>
+      value.replace(
+        /[&<>"']/g,
+        (char) =>
+          ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char] ?? char,
+      );
+    const win = window.open("", "_blank", "width=460,height=640");
+    if (!win) return;
+    win.document.write(
+      `<!doctype html><html><head><meta charset="utf-8"><title>${escape(reg.uniqueId)}</title>` +
+        `<style>body{font-family:system-ui,-apple-system,sans-serif;text-align:center;padding:32px;color:#111}` +
+        `.code{width:300px;height:300px}h1{font-size:20px;margin:0 0 4px}p{margin:0 0 20px;color:#555}` +
+        `.id{font-family:monospace;font-size:18px;letter-spacing:2px}</style></head><body>` +
+        `<h1>${escape(reg.name)}</h1><p class="id">${escape(reg.uniqueId)}</p>` +
+        `<img class="code" src="${dataUrl}" alt="QR code ${escape(reg.uniqueId)}"/>` +
+        `</body></html>`,
+    );
+    win.document.close();
+    win.focus();
+    win.print();
   };
 
   const sendAllQrEmails = async () => {
@@ -520,22 +570,38 @@ function AdminDashboard() {
                       {new Date(reg.createdAt).toLocaleDateString()}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
-                        disabled={
-                          deleteMutation.isPending && deleteMutation.variables === reg.uniqueId
-                        }
-                        onClick={() => handleDelete(reg.uniqueId, reg.name)}
-                        title="Delete registration"
-                      >
-                        {deleteMutation.isPending && deleteMutation.variables === reg.uniqueId ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        ) : (
-                          <Trash2 className="w-3.5 h-3.5" />
-                        )}
-                      </Button>
+                      <div className="inline-flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          disabled={qrLoadingId === reg.uniqueId}
+                          onClick={() => void openQrPreview(reg)}
+                          title="Show / print QR code"
+                        >
+                          {qrLoadingId === reg.uniqueId ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <QrCode className="w-3.5 h-3.5" />
+                          )}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
+                          disabled={
+                            deleteMutation.isPending && deleteMutation.variables === reg.uniqueId
+                          }
+                          onClick={() => handleDelete(reg.uniqueId, reg.name)}
+                          title="Delete registration"
+                        >
+                          {deleteMutation.isPending && deleteMutation.variables === reg.uniqueId ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-3.5 h-3.5" />
+                          )}
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -548,6 +614,30 @@ function AdminDashboard() {
           </div>
         </div>
       </main>
+
+      <Dialog open={!!qrPreview} onOpenChange={(open) => !open && setQrPreview(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{qrPreview?.reg.name}</DialogTitle>
+            <DialogDescription className="font-mono">{qrPreview?.reg.uniqueId}</DialogDescription>
+          </DialogHeader>
+          {qrPreview ? (
+            <div className="flex flex-col items-center gap-4 pt-2">
+              <img
+                src={qrPreview.dataUrl}
+                alt={`Check-in QR code for ${qrPreview.reg.uniqueId}`}
+                className="w-64 h-64 rounded-lg border border-border bg-white p-2"
+              />
+              <p className="text-xs text-muted-foreground text-center">
+                Show this at the check-in desk, or print it as a backup.
+              </p>
+              <Button onClick={printQrCode}>
+                <Printer className="w-4 h-4" /> Print QR Code
+              </Button>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

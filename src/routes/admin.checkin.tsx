@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { Html5Qrcode } from "html5-qrcode";
+import { Html5Qrcode, type CameraDevice, type Html5QrcodeCameraScanConfig } from "html5-qrcode";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
@@ -31,6 +31,132 @@ export const Route = createFileRoute("/admin/checkin")({
   }),
 });
 
+const SCAN_PROCESSING_MS = 3500;
+const CMDA_ID_PATTERN = /^CMDA-[A-Z0-9]{4,16}$/i;
+
+type CameraAttempt = {
+  camera: string | MediaTrackConstraints;
+  videoConstraints?: MediaTrackConstraints;
+};
+
+// The scan box must scale with the viewfinder. A fixed size (e.g. 250x250)
+// exceeds the video area on small screens, which silently stops detection.
+function qrBoxSize(viewfinderWidth: number, viewfinderHeight: number) {
+  const side = Math.max(50, Math.floor(Math.min(viewfinderWidth, viewfinderHeight) * 0.72));
+  return { width: side, height: side };
+}
+
+// html5-qrcode measures the container when the camera starts. If it is still
+// hidden/unsized the scan canvas is created at 0x0 and nothing is ever decoded.
+function waitForElementSize(element: HTMLElement | null, timeoutMs = 5000): Promise<boolean> {
+  return new Promise((resolve) => {
+    const startedAt = performance.now();
+    const tick = () => {
+      if (element && element.isConnected && element.clientWidth > 0 && element.clientHeight > 0) {
+        resolve(true);
+        return;
+      }
+      if (performance.now() - startedAt >= timeoutMs) {
+        resolve(false);
+        return;
+      }
+      requestAnimationFrame(tick);
+    };
+    tick();
+  });
+}
+
+function cameraRank(device: CameraDevice): number {
+  const label = (device.label || "").toLowerCase();
+  if (/back|rear|environment|world/.test(label)) return 2;
+  if (/front|user|face/.test(label)) return 0;
+  return 1;
+}
+
+async function buildCameraAttempts(): Promise<CameraAttempt[]> {
+  const attempts: CameraAttempt[] = [
+    {
+      camera: { facingMode: "environment" },
+      videoConstraints: {
+        facingMode: { ideal: "environment" },
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+      },
+    },
+    { camera: { facingMode: "environment" } },
+  ];
+
+  try {
+    const cameras = await Html5Qrcode.getCameras();
+    const ordered = [...cameras].sort((a, b) => cameraRank(b) - cameraRank(a));
+    for (const device of ordered) {
+      if (device.id) attempts.push({ camera: device.id });
+    }
+  } catch {
+    /* enumeration unavailable — the facingMode attempts still cover it */
+  }
+
+  attempts.push({ camera: { facingMode: "user" } });
+  return attempts;
+}
+
+function describeCameraError(error: unknown): string {
+  if (typeof window !== "undefined" && window.isSecureContext === false) {
+    return "The camera needs a secure (HTTPS) connection. Open this page over https:// and try again.";
+  }
+  const message = String(error ?? "").toLowerCase();
+  if (
+    message.includes("notallowed") ||
+    message.includes("permission") ||
+    message.includes("denied")
+  ) {
+    return "Camera permission was denied. Allow camera access for this site, then start the scanner again.";
+  }
+  if (message.includes("notfound") || message.includes("no camera") || message.includes("nosuch")) {
+    return "No camera was found on this device. Use manual entry instead.";
+  }
+  if (
+    message.includes("notreadable") ||
+    message.includes("in use") ||
+    message.includes("could not start") ||
+    message.includes("abort")
+  ) {
+    return "The camera is busy or unavailable (another app may be using it). Close other apps and try again.";
+  }
+  if (message.includes("overconstrained")) {
+    return "This camera doesn't support the requested settings. Try again or use manual entry.";
+  }
+  return "Could not start the camera. Use manual entry instead.";
+}
+
+// Accepts both formats: plain "CMDA-XXXXXXXX" codes and the older JSON codes.
+function parseQrPayload(text: string): { id: string; name: string; email: string } | null {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+
+  try {
+    const parsed: unknown = JSON.parse(trimmed);
+    if (parsed && typeof parsed === "object") {
+      const record = parsed as Record<string, unknown>;
+      const id = String(record.id ?? record.uniqueId ?? "").trim();
+      if (!id) return null;
+      return {
+        id,
+        name: record.name ? String(record.name) : "",
+        email: record.email ? String(record.email) : "",
+      };
+    }
+  } catch {
+    /* not JSON — fall through to plain ID handling */
+  }
+
+  if (CMDA_ID_PATTERN.test(trimmed)) {
+    return { id: trimmed.toUpperCase(), name: "", email: "" };
+  }
+
+  return null;
+}
+
 function CheckInPage() {
   const [scanning, setScanning] = useState(false);
   const [result, setResult] = useState<{ id: string; name: string; email: string } | null>(null);
@@ -45,6 +171,7 @@ function CheckInPage() {
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const scannerDivRef = useRef<HTMLDivElement>(null);
   const scanTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scanHandledRef = useRef(false);
   const queryClient = useQueryClient();
 
   const { data: registrations = [] } = useQuery({
@@ -78,50 +205,132 @@ function CheckInPage() {
     },
   });
 
+  const resumeScanner = () => {
+    scanHandledRef.current = false;
+    try {
+      scannerRef.current?.resume();
+    } catch {
+      /* scanner is not paused (e.g. it was never started) */
+    }
+  };
+
+  const pauseScanner = () => {
+    try {
+      scannerRef.current?.pause();
+    } catch {
+      /* scanner is not scanning */
+    }
+  };
+
+  const finishScanProcessing = async (startedAt: number) => {
+    const remaining = SCAN_PROCESSING_MS - (Date.now() - startedAt);
+    if (remaining > 0) {
+      await new Promise((resolve) => setTimeout(resolve, remaining));
+    }
+    setProcessing(false);
+  };
+
+  const handleScannedText = async (text: string) => {
+    const startedAt = Date.now();
+    setError(null);
+    setProcessing(true);
+
+    const payload = parseQrPayload(text);
+    if (!payload) {
+      await finishScanProcessing(startedAt);
+      setError("That QR code is not a CMDA check-in code.");
+      resumeScanner();
+      return;
+    }
+
+    let id = payload.id;
+    let name = payload.name;
+    let email = payload.email;
+
+    if (!name) {
+      try {
+        const reg = await getRegistration({ data: id });
+        if (reg) {
+          id = reg.uniqueId;
+          name = reg.name;
+          email = reg.email;
+        }
+      } catch {
+        /* treated as not found below */
+      }
+    }
+
+    await finishScanProcessing(startedAt);
+
+    if (name) {
+      setResult({ id, name, email });
+    } else {
+      setError(`No registration found with ID ${id}.`);
+      resumeScanner();
+    }
+  };
+
   const startScanner = async () => {
     setError(null);
     setResult(null);
     setCheckedInReg(null);
+    scanHandledRef.current = false;
 
     // Show the scanner div first so Html5Qrcode can render into it
     setScanning(true);
 
-    // Wait for React to render the div
-    await new Promise((r) => setTimeout(r, 100));
-
-    try {
-      const scanner = new Html5Qrcode("qr-scanner");
-      scannerRef.current = scanner;
-
-      await scanner.start(
-        { facingMode: "environment" },
-        { fps: 10, qrbox: { width: 250, height: 250 } },
-        (decodedText) => {
-          try {
-            const data = JSON.parse(decodedText);
-            if (data.id) {
-              scanner.pause();
-              setError(null);
-              setProcessing(true);
-              if (scanTimerRef.current) clearTimeout(scanTimerRef.current);
-              scanTimerRef.current = setTimeout(() => {
-                scanTimerRef.current = null;
-                setProcessing(false);
-                setResult(data);
-              }, 3500);
-            } else {
-              setError("Invalid QR code format.");
-            }
-          } catch {
-            setError("Could not read QR code. Try again.");
-          }
-        },
-        () => {},
-      );
-    } catch (err) {
+    // Wait until the container is actually laid out — starting the camera while
+    // it is still hidden produces a 0x0 scan area that never decodes anything.
+    const containerVisible = await waitForElementSize(scannerDivRef.current);
+    if (!containerVisible) {
       setScanning(false);
-      setError("Camera access denied or not available. Use manual entry instead.");
+      setError(
+        "The scanner view did not appear. Rotate the screen or reload the page, then try again.",
+      );
+      return;
     }
+
+    const attempts = await buildCameraAttempts();
+    let lastError: unknown = null;
+
+    for (const attempt of attempts) {
+      let candidate: Html5Qrcode | null = null;
+      try {
+        candidate = new Html5Qrcode("qr-scanner");
+
+        const config: Html5QrcodeCameraScanConfig = {
+          fps: 15,
+          qrbox: qrBoxSize,
+          ...(attempt.videoConstraints ? { videoConstraints: attempt.videoConstraints } : {}),
+        };
+
+        await candidate.start(
+          attempt.camera,
+          config,
+          (decodedText) => {
+            const text = decodedText.trim();
+            if (!text || scanHandledRef.current) return;
+            scanHandledRef.current = true;
+            pauseScanner();
+            void handleScannedText(text);
+          },
+          () => {},
+        );
+
+        scannerRef.current = candidate;
+        return;
+      } catch (err) {
+        lastError = err;
+        try {
+          candidate?.clear();
+        } catch {
+          /* nothing to clean up */
+        }
+      }
+    }
+
+    setScanning(false);
+    setError(describeCameraError(lastError));
   };
 
   const stopScanner = async () => {
@@ -130,6 +339,7 @@ function CheckInPage() {
       scanTimerRef.current = null;
     }
     setProcessing(false);
+    scanHandledRef.current = false;
     if (scannerRef.current) {
       try {
         await scannerRef.current.stop();
@@ -189,9 +399,7 @@ function CheckInPage() {
     setError(null);
     setCheckedInReg(null);
     setManualId("");
-    if (scannerRef.current) {
-      scannerRef.current.resume();
-    }
+    resumeScanner();
   };
 
   const exportAttendance = () => {

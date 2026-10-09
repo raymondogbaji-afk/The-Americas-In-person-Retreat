@@ -1,5 +1,6 @@
 import { Resend } from "resend";
 import QRCode from "qrcode";
+import { QR_RENDER_OPTIONS, qrContent } from "./qr";
 
 const FROM = "CMDA Retreat <noreply@in-person-retreat.cmdanigeria.org>";
 
@@ -21,11 +22,19 @@ function getApiKey(): string {
 }
 
 async function buildQrBuffer(reg: QrEmailInput): Promise<string> {
-  const qrBuffer = await QRCode.toBuffer(
-    JSON.stringify({ id: reg.uniqueId, name: reg.name, email: reg.email }),
-    { width: 400, margin: 2, color: { dark: "#1a0a3e" } },
-  );
+  // Plain unique ID (see src/lib/qr.ts): a much smaller symbol that phone
+  // cameras pick up reliably. The scanner still accepts older JSON codes.
+  const qrBuffer = await QRCode.toBuffer(qrContent(reg.uniqueId), QR_RENDER_OPTIONS);
   return qrBuffer.toString("base64");
+}
+
+function buildAttachments(qrBase64: string) {
+  return [
+    { filename: "qrcode.png", content: qrBase64, contentId: "qrcode" },
+    // Some mail clients block inline CID images, so ship the same PNG as a
+    // regular attachment too.
+    { filename: "cmda-checkin-qr.png", content: qrBase64 },
+  ];
 }
 
 function buildEmailHtml({
@@ -90,7 +99,8 @@ function buildEmailHtml({
 
         <div style="text-align:center;margin-bottom:24px">
           <p style="margin:0 0 12px;font-size:13px;color:#6b7280"><strong>Your QR Code</strong> — present this at check-in</p>
-          <img src="${qrDataUrl}" alt="QR Code" style="width:200px;height:200px;border-radius:8px" />
+          <img src="${qrDataUrl}" alt="Check-in QR code for ${uniqueId}" width="240" height="240" style="width:240px;height:240px;border-radius:8px;border:1px solid #e5e7eb;background:#ffffff" />
+          <p style="margin:12px 0 0;font-size:13px;color:#6b7280;font-family:monospace">Code: ${uniqueId}</p>
         </div>
 
         <p style="margin:0 0 8px;font-size:14px;color:#6b7280">
@@ -117,7 +127,7 @@ export async function sendConfirmationEmail(reg: QrEmailInput): Promise<void> {
     from: FROM,
     to: reg.email,
     subject: `CMDA Retreat 2026 — Registration Confirmed (${reg.uniqueId})`,
-    attachments: [{ filename: "qrcode.png", content: qrBase64, contentId: "qrcode" }],
+    attachments: buildAttachments(qrBase64),
     html: buildEmailHtml({
       name: reg.name,
       uniqueId: reg.uniqueId,
@@ -143,7 +153,7 @@ export async function sendQrEmail(reg: QrEmailInput): Promise<void> {
     from: FROM,
     to: reg.email,
     subject: `Your Check-In QR Code — CMDA Americas Retreat 2026 (${reg.uniqueId})`,
-    attachments: [{ filename: "qrcode.png", content: qrBase64, contentId: "qrcode" }],
+    attachments: buildAttachments(qrBase64),
     html: buildEmailHtml({
       name: reg.name,
       uniqueId: reg.uniqueId,
