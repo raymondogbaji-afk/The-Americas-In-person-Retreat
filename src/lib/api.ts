@@ -100,3 +100,14 @@ export const sendQrEmailBatch = createServerFn({ method: "POST" })
 
     return { sent: sent.length, failed, remaining, processed: regs.length };
   });
+
+export const resendQrEmail = createServerFn({ method: "POST" })
+  .validator((id: unknown) => id as string)
+  .handler(async ({ data: id }) => {
+    const reg = await getRegistrationById(id);
+    if (!reg) throw new Error("Registration not found");
+    if (!reg.email) throw new Error("This registration has no email address");
+    await sendQrEmail(reg);
+    await markQrEmailsSent([reg.uniqueId]);
+    return { uniqueId: reg.uniqueId, email: reg.email };
+  });

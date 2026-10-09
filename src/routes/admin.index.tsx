@@ -16,6 +16,7 @@ import {
   Send,
   AlertCircle,
   CheckCircle2,
+  RefreshCw,
 } from "lucide-react";
 import {
   listRegistrations,
@@ -23,6 +24,7 @@ import {
   markPaid,
   getQrEmailStatus,
   sendQrEmailBatch,
+  resendQrEmail,
 } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -83,6 +85,22 @@ function AdminDashboard() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["registrations"] });
       queryClient.invalidateQueries({ queryKey: ["registration-stats"] });
+    },
+  });
+
+  const resendQrMutation = useMutation({
+    mutationFn: (id: string) => resendQrEmail({ data: id }),
+    onSuccess: (res) => {
+      setEmailResult({ sent: 1, failed: 0, errors: [`Resent QR code to ${res.email}`] });
+      queryClient.invalidateQueries({ queryKey: ["registrations"] });
+      queryClient.invalidateQueries({ queryKey: ["qr-email-status"] });
+    },
+    onError: (err) => {
+      setEmailResult({
+        sent: 0,
+        failed: 1,
+        errors: [err instanceof Error ? err.message : String(err)],
+      });
     },
   });
 
@@ -436,16 +454,37 @@ function AdminDashboard() {
                       )}
                     </TableCell>
                     <TableCell>
-                      {reg.emailSentAt ? (
-                        <Badge
-                          variant="default"
-                          className="bg-success/10 text-success hover:bg-success/15"
+                      <div className="flex items-center gap-2">
+                        {reg.emailSentAt ? (
+                          <Badge
+                            variant="default"
+                            className="bg-success/10 text-success hover:bg-success/15"
+                          >
+                            Sent
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline">Pending</Badge>
+                        )}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 px-2"
+                          disabled={
+                            !reg.email ||
+                            (resendQrMutation.isPending &&
+                              resendQrMutation.variables === reg.uniqueId)
+                          }
+                          onClick={() => resendQrMutation.mutate(reg.uniqueId)}
                         >
-                          Sent
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline">Pending</Badge>
-                      )}
+                          {resendQrMutation.isPending &&
+                          resendQrMutation.variables === reg.uniqueId ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <RefreshCw className="w-3 h-3" />
+                          )}
+                          {reg.emailSentAt ? "Resend" : "Send"}
+                        </Button>
+                      </div>
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
                       {new Date(reg.createdAt).toLocaleDateString()}
