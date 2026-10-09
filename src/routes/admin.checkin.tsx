@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { Html5Qrcode } from "html5-qrcode";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -10,10 +10,19 @@ import {
   CameraOff,
   UserCheck,
   Loader2,
+  Download,
 } from "lucide-react";
-import { checkInAttendee, getRegistration } from "@/lib/api";
+import { checkInAttendee, getRegistration, listRegistrations } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 export const Route = createFileRoute("/admin/checkin")({
   component: CheckInPage,
@@ -35,6 +44,20 @@ function CheckInPage() {
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const scannerDivRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
+
+  const { data: registrations = [] } = useQuery({
+    queryKey: ["registrations"],
+    queryFn: () => listRegistrations(),
+    refetchInterval: 15000,
+  });
+
+  const checkedIn = registrations
+    .filter((r) => r.checkedIn)
+    .sort((a, b) => {
+      const at = a.checkedInAt ? new Date(a.checkedInAt).getTime() : 0;
+      const bt = b.checkedInAt ? new Date(b.checkedInAt).getTime() : 0;
+      return bt - at;
+    });
 
   const checkInMutation = useMutation({
     mutationFn: (id: string) => checkInAttendee({ data: id }),
@@ -144,6 +167,38 @@ function CheckInPage() {
     if (scannerRef.current) {
       scannerRef.current.resume();
     }
+  };
+
+  const exportAttendance = () => {
+    const headers = [
+      "Name",
+      "Unique ID",
+      "Email",
+      "Phone",
+      "Fee",
+      "Payment Status",
+      "Checked In At",
+    ];
+    const rows = checkedIn.map((r) => [
+      r.name,
+      r.uniqueId,
+      r.email,
+      r.phone,
+      r.fee === "single" ? "Single ($250)" : "Couple ($400)",
+      r.paymentStatus,
+      r.checkedInAt || "",
+    ]);
+    const csv = [
+      headers.join(","),
+      ...rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")),
+    ].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `cmda-retreat-attendance-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -314,6 +369,76 @@ function CheckInPage() {
               </div>
             </>
           )}
+        </div>
+
+        <div className="max-w-4xl mx-auto mt-10">
+          <div className="bg-card border border-border rounded-2xl shadow-sm">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 sm:p-6 border-b border-border">
+              <div>
+                <h2 className="font-display font-semibold flex items-center gap-2">
+                  <UserCheck className="w-4 h-4 text-success" /> Checked-In Attendees
+                </h2>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {checkedIn.length} checked in
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={exportAttendance}
+                disabled={checkedIn.length === 0}
+              >
+                <Download className="w-4 h-4" /> Export CSV
+              </Button>
+            </div>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>ID</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Payment</TableHead>
+                    <TableHead>Checked In At</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {checkedIn.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center py-10 text-muted-foreground">
+                        No attendees checked in yet.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    checkedIn.map((reg) => (
+                      <TableRow key={reg.id}>
+                        <TableCell className="font-medium">{reg.name}</TableCell>
+                        <TableCell className="font-mono text-xs">{reg.uniqueId}</TableCell>
+                        <TableCell className="text-muted-foreground">{reg.email || "—"}</TableCell>
+                        <TableCell>
+                          {reg.paymentStatus === "paid" ? (
+                            <Badge
+                              variant="default"
+                              className="bg-success/10 text-success hover:bg-success/15"
+                            >
+                              Paid
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-warning border-warning/30">
+                              Pending
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {reg.checkedInAt ? new Date(reg.checkedInAt).toLocaleString() : "—"}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
         </div>
       </main>
     </div>
